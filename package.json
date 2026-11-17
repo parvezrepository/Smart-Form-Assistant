@@ -1,0 +1,20 @@
+{
+  "name": "smart-form-assistant",
+  "version": "1.0.0",
+  "description": "Smart Form Assistant Chrome Extension with Personal OpenRouter API Key Management System",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/**/*.test.js",
+    "build:icons": "node scripts/generate-icons.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "openrouter",
+    "form-assistant",
+    "ai-form-filler",
+    "manifest-v3",
+    "personal-api-key"
+  ],
+  "author": "Smart Form Assistant Team",
+  "license": "MIT"
+}

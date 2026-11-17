@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Form Tick Assistant</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-box">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Smart Form Assistant</h1>
+          <p class="brand-subtitle">Google Forms &bull; OpenRouter AI</p>
+        </div>
+      </div>
+      <div id="statusBadge" class="status-badge badge-unconfigured">
+        <span class="status-dot"></span>
+        <span id="statusBadgeText">Not Set</span>
+      </div>
+    </header>
+
+    <!-- Notification Toast / Alert -->
+    <div id="notificationAlert" class="notification-alert hidden" role="alert">
+      <span id="notificationIcon" class="notification-icon">ℹ️</span>
+      <span id="notificationMessage" class="notification-text"></span>
+    </div>
+
+    <!-- VIEW 1: API SETUP / INPUT VIEW (shown when no key or when editing) -->
+    <section id="setupView" class="view-panel">
+      <div class="section-card">
+        <h2 class="card-title">OpenRouter API Setup</h2>
+        <p class="card-description">
+          Each browser profile uses its own API key. Keys are saved locally and never shared.
+        </p>
+
+        <form id="apiSetupForm" novalidate>
+          <div class="form-group">
+            <label for="apiKeyInput" class="form-label">
+              <span>OpenRouter API Key</span>
+              <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" class="link-external">
+                Get Key &nearr;
+              </a>
+            </label>
+            <div class="input-password-wrapper">
+              <input
+                type="password"
+                id="apiKeyInput"
+                class="form-input"
+                placeholder="sk-or-v1-..."
+                autocomplete="off"
+                spellcheck="false"
+                required
+              />
+              <button type="button" id="toggleKeyVisibility" class="btn-icon" title="Toggle visibility" aria-label="Toggle API Key visibility">
+                <svg id="eyeIcon" class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+            <p class="input-help">Keys remain strictly in your browser's local storage.</p>
+          </div>
+
+          <!-- Model Selection -->
+          <div class="form-group">
+            <label for="modelSelect" class="form-label">AI Model</label>
+            <select id="modelSelect" class="form-select">
+              <option value="openrouter/free" selected>OpenRouter Free (Default - Free)</option>
+              <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash</option>
+              <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
+              <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
+              <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+              <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+              <option value="custom">Custom Model ID...</option>
+            </select>
+          </div>
+
+          <!-- Custom Model ID Input (hidden by default) -->
+          <div id="customModelGroup" class="form-group hidden">
+            <label for="customModelInput" class="form-label">Custom Model ID</label>
+            <input
+              type="text"
+              id="customModelInput"
+              class="form-input"
+              placeholder="e.g. mistralai/mistral-small"
+              spellcheck="false"
+            />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" id="btnConnect" class="btn btn-primary">
+              <span class="btn-spinner hidden" id="connectSpinner"></span>
+              <span id="connectBtnText">Connect API</span>
+            </button>
+            <button type="button" id="btnCancelEdit" class="btn btn-secondary hidden">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- VIEW 2: SAVED API KEY VIEW (shown on popup open when key exists) -->
+    <section id="savedKeyView" class="view-panel hidden">
+      <!-- Google Forms Live Detection Card -->
+      <div id="formDetectionCard" class="section-card form-detection-card">
+        <div class="card-header-row">
+          <div class="d-flex align-center gap-6">
+            <span class="form-icon">📋</span>
+            <h2 class="card-title">Google Form Status</h2>
+          </div>
+          <span id="formStatusBadge" class="badge-tag badge-tag-neutral">Scanning Tab...</span>
+        </div>
+
+        <!-- Detected Form Info Panel -->
+        <div id="detectedFormPanel" class="hidden">
+          <div class="form-summary-header">
+            <h3 id="formTitleText" class="detected-form-title">Survey Title</h3>
+            <span id="sectionIndicatorBadge" class="section-badge">Section 1 of 1</span>
+          </div>
+
+          <div class="stats-pills-row mt-2">
+            <div class="stat-pill">
+              <span class="stat-num" id="statRadioCount">0</span>
+              <span class="stat-label">Radio</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-num" id="statCheckboxCount">0</span>
+              <span class="stat-label">Checkbox</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-num" id="statTotalCount">0</span>
+              <span class="stat-label">Total</span>
+            </div>
+          </div>
+
+          <!-- Question List Preview -->
+          <div class="questions-accordion mt-3">
+            <div class="accordion-header" id="toggleQuestionsList">
+              <span class="accordion-title">Detected Questions (<span id="detectedCountLabel">0</span>)</span>
+              <span id="accordionArrow" class="accordion-arrow">&blacktriangledown;</span>
+            </div>
+            <div id="questionsListContainer" class="questions-list-body">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Action Buttons: Review & Apply Flow OR Fast Analyze & Apply -->
+          <div class="analysis-action-box mt-3">
+            <div class="action-grid">
+              <button type="button" id="btnAnalyzeForm" class="btn btn-secondary" title="Analyze questions with AI first">
+                <span class="btn-spinner hidden" id="analyzeSpinner"></span>
+                <span id="analyzeBtnText">✨ Analyze Only</span>
+              </button>
+              <button type="button" id="btnAnalyzeAndApply" class="btn btn-primary" title="Analyze and automatically apply suitable choices in one click">
+                <span class="btn-spinner hidden" id="analyzeApplySpinner"></span>
+                <span id="analyzeApplyBtnText">⚡ Analyze & Apply</span>
+              </button>
+            </div>
+            <button type="button" id="btnRescanForm" class="btn btn-outline btn-sm mt-2">
+              <span class="btn-spinner hidden" id="rescanSpinner"></span>
+              <span>Rescan Form Questions</span>
+            </button>
+          </div>
+
+          <!-- Phase 04: AI Suggestions Review Container -->
+          <div id="aiResultsPanel" class="ai-results-box mt-3 hidden">
+            <div class="ai-results-header">
+              <span class="ai-header-title">🤖 AI Suggestions</span>
+              <span id="aiModelBadge" class="badge-tag badge-tag-success">openrouter/free</span>
+            </div>
+
+            <!-- Suggestions List -->
+            <div id="aiSuggestionsList" class="ai-suggestions-list mt-2">
+              <!-- Rendered via JS -->
+            </div>
+
+            <!-- Approval and Application Controls -->
+            <div class="approval-actions-box mt-3">
+              <button type="button" id="btnApplySelections" class="btn btn-primary" title="Apply approved selections to the Google Form">
+                <span class="btn-spinner hidden" id="applySpinner"></span>
+                <span id="applyBtnText">✓ Apply Approved Choices</span>
+              </button>
+              <p class="safety-reminder mt-2">
+                🔒 <strong>Safety Note:</strong> This extension never automatically submits the form. Please review and submit when ready.
+              </p>
+            </div>
+
+            <!-- Application & Verification Status Box -->
+            <div id="applyStatusBox" class="apply-status-box mt-2 hidden">
+              <span id="applyStatusIcon" class="apply-status-icon">✓</span>
+              <span id="applyStatusText" class="apply-status-text">All selections verified in DOM.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- No Google Form Open Panel -->
+        <div id="noFormPanel" class="no-form-box">
+          <p class="no-form-text">No active Google Form detected in current tab.</p>
+          <p class="no-form-subtext">Open or switch to any <code>docs.google.com/forms/*</code> tab to inspect questions.</p>
+        </div>
+      </div>
+
+      <!-- Saved API Key Configuration Section -->
+      <div class="section-card mt-3">
+        <div class="card-header-row">
+          <h2 class="card-title">API Configuration</h2>
+          <span class="badge-tag">Profile Isolated</span>
+        </div>
+
+        <!-- Masked Key Display -->
+        <div class="key-display-box">
+          <div class="key-label-row">
+            <span class="label-muted">Active API Key</span>
+            <span class="shield-badge">🔒 Local Only</span>
+          </div>
+          <div class="key-value-row">
+            <code id="maskedKeyText" class="masked-key">sk-or-v1-••••••••••••</code>
+          </div>
+        </div>
+
+        <!-- Details / Metadata -->
+        <div class="metadata-grid">
+          <div class="metadata-item">
+            <span class="meta-label">Selected Model:</span>
+            <span id="activeModelLabel" class="meta-value">openrouter/free</span>
+          </div>
+          <div class="metadata-item">
+            <span class="meta-label">Connection:</span>
+            <span id="connectionStatusText" class="meta-value">Ready</span>
+          </div>
+        </div>
+
+        <!-- Quick Model Changer for Saved Key -->
+        <div class="form-group mt-3">
+          <label for="savedModelSelect" class="form-label">Active Model</label>
+          <select id="savedModelSelect" class="form-select form-select-sm">
+            <option value="openrouter/free">OpenRouter Free (Default - Free)</option>
+            <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash</option>
+            <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
+            <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
+            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+            <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+          </select>
+        </div>
+
+        <!-- Saved Key Actions -->
+        <div class="action-grid mt-3">
+          <button type="button" id="btnUseSaved" class="btn btn-primary" title="Confirm connection and activate assistant">
+            <span class="btn-spinner hidden" id="useSavedSpinner"></span>
+            <span>Use Saved API</span>
+          </button>
+          <button type="button" id="btnTestApi" class="btn btn-secondary" title="Test direct API connectivity to OpenRouter">
+            <span class="btn-spinner hidden" id="testSpinner"></span>
+            <span>Test API</span>
+          </button>
+        </div>
+
+        <div class="action-grid-sub mt-2">
+          <button type="button" id="btnChangeApi" class="btn btn-outline" title="Update your API key">
+            Change API Key
+          </button>
+          <button type="button" id="btnRemoveApi" class="btn btn-danger-outline" title="Delete API key from local storage">
+            Remove API Key
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer Note -->
+    <footer class="app-footer">
+      <p class="footer-note">
+        Direct connection to <code>openrouter.ai/api/v1</code> &bull; Zero backend
+      </p>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
